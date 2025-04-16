@@ -134,7 +134,7 @@ pub enum RunnerError {
     TimeError,
 
     #[error("Unable to register plugin to kubelet")]
-    RegistrationError,
+    RegistrationError(#[from] anyhow::Error),
 }
 
 pub(super) async fn serve_and_register_plugin<T: Clone + 'static + Send + Sync>(
@@ -206,7 +206,7 @@ async fn register_plugin(
 
     akri_shared::uds::unix_stream::try_connect(&socket_path)
         .await
-        .map_err(|_| RunnerError::RegistrationError)?;
+        .map_err(RunnerError::RegistrationError)?;
 
     info!(
         "register - entered for Instance {} and socket_name: {}",
@@ -228,7 +228,8 @@ async fn register_plugin(
             UnixStream::connect(kubelet_socket_closure.clone())
         }))
         .await
-        .map_err(|_| RunnerError::RegistrationError)?;
+        .map_err(anyhow::Error::from)
+        .map_err(RunnerError::RegistrationError)?;
     let mut registration_client = registration_client::RegistrationClient::new(channel);
 
     let register_request = tonic::Request::new(RegisterRequest {
@@ -246,6 +247,7 @@ async fn register_plugin(
     registration_client
         .register(register_request)
         .await
-        .map_err(|_| RunnerError::RegistrationError)?;
+        .map_err(anyhow::Error::from)
+        .map_err(RunnerError::RegistrationError)?;
     Ok(())
 }
